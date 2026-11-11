@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>BetterDiff</title>
+<link id="fav" rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='2' y='14' width='60' height='36' rx='18' fill='%231f4a2c'/%3E%3Ctext x='32' y='33' text-anchor='middle' dominant-baseline='central' font-family='system-ui,sans-serif' font-size='26' font-weight='700' fill='%23b8f0c6'%3E%2B1%3C/text%3E%3C/svg%3E">
 <style>
 :root{
   box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
@@ -54,7 +55,8 @@ button:hover{filter:brightness(1.06)}
 #pop kbd{font:11px ui-monospace,Menlo,Consolas,monospace;opacity:.7}
 #pop .ap{color:var(--add-fg);background:var(--add-bg);border-color:transparent}
 #pop .dc{color:var(--del-fg);background:var(--del-bg);border-color:transparent}
-.out:empty::before{content:attr(data-placeholder);color:var(--muted);font-style:italic;pointer-events:none;user-select:none}
+textarea::placeholder{color:var(--muted);opacity:.7}
+.out:empty::before{content:attr(data-placeholder);color:var(--muted);opacity:.7;pointer-events:none;user-select:none}
 </style>
 </head>
 <body>
@@ -95,7 +97,7 @@ button:hover{filter:brightness(1.06)}
       <h2>Diff <span class="count">(editable — hover a change to apply or discard it)</span></h2>
       <span><span class="count" id="cr"></span> <button id="copy" class="primary" type="button">Copy</button></span>
     </div>
-    <div class="out" id="out" contenteditable="true" spellcheck="false" aria-label="Diff" data-placeholder="Paste text into both boxes to see the differences."></div>
+    <div class="out" id="out" contenteditable="true" spellcheck="false" aria-label="Diff" data-placeholder="The diff will appear here…"></div>
   </div>
 </main>
 <div id="pop" role="menu"><button type="button" class="ap">Apply <kbd>Ctrl ↵</kbd></button><button type="button" class="dc">Discard <kbd>Ctrl ⌫</kbd></button></div>
@@ -193,7 +195,7 @@ function render(from){
   OUT.contentEditable = (a || b) ? 'true' : 'false';
   if (!a && !b) {
     
-    $('sa').textContent = '+0'; $('sd').textContent = '−0'; $('cr').textContent = '';
+    $('sa').textContent = '+0'; $('sd').textContent = '−0'; $('cr').textContent = ''; stAdd = stDel = 0; setFavicon(0); updateTitle();
     return;
   }
   const mode = MODE.value;
@@ -234,7 +236,7 @@ function textOf(withDel, withIns){
 }
 // Result text = removed text dropped, additions kept (what you see in the diff, minus strikethroughs)
 const resultText = () => textOf(false, true);
-function updateResultCount(){ $('cr').textContent = fmt(resultText()); }
+function updateResultCount(){ $('cr').textContent = fmt(resultText()); updateTitle(); }
 $('applyall').addEventListener('click', () => {
   hidePop();
   OUT.querySelectorAll('.chg').forEach(c => {
@@ -253,6 +255,22 @@ function updateStats(){
   const unit = mode === 'char' ? 'chars' : mode === 'line' ? 'lines' : 'words';
   $('sa').textContent = '+' + add + ' ' + unit;
   $('sd').textContent = '−' + del + ' ' + unit;
+  stAdd = add; stDel = del;
+  setFavicon(OUT.querySelectorAll('.chg').length);
+  updateTitle();
+}
+// Tab title: B-Diff +added -removed first three words of the result
+let stAdd = 0, stDel = 0;
+function updateTitle(){
+  const w = resultText().trim().split(/\s+/).filter(Boolean).slice(0, 3).join(' ');
+  document.title = 'B-Diff +' + stAdd + ' -' + stDel + (w ? ' ' + w : '');
+}
+// Favicon: green pill showing how many changes are still unresolved
+function setFavicon(n){
+  const t = n > 99 ? '99+' : '+' + n;
+  const size = t.length <= 2 ? 26 : t.length === 3 ? 22 : 18;
+  const svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect x='2' y='14' width='60' height='36' rx='18' fill='#1f4a2c'/><text x='32' y='33' text-anchor='middle' dominant-baseline='central' font-family='system-ui,sans-serif' font-size='" + size + "' font-weight='700' fill='#b8f0c6'>" + t + "</text></svg>";
+  $('fav').href = 'data:image/svg+xml,' + encodeURIComponent(svg);
 }
 
 // ---- Apply / discard popup ----

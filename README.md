@@ -1,2 +1,7 @@
 A better diff checker.
-made with assistance from Claude.
+
+
+https://sentientdragon5.github.io/BetterDiff/
+
+
+Made with assistance from Claude.

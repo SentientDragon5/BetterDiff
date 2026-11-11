@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BetterDiff</title>
+<style>
+:root{
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#f6f7f9;--surface:#fff;--text:#1c2128;--muted:#6a737d;--border:#d6dae0;--accent:#2f6fed;
+  --add-bg:#c8f0d0;--add-fg:#0d4a1f;--del-bg:#fbd0d0;--del-fg:#7a1212;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#12151a;--surface:#1b2027;--text:#e6e9ee;--muted:#8b95a3;--border:#323944;--accent:#6b9cff;
+  --add-bg:#1f4a2c;--add-fg:#b8f0c6;--del-bg:#5a2222;--del-fg:#ffc9c9;}}
+:root[data-theme="dark"]{
+  --bg:#12151a;--surface:#1b2027;--text:#e6e9ee;--muted:#8b95a3;--border:#323944;--accent:#6b9cff;
+  --add-bg:#1f4a2c;--add-fg:#b8f0c6;--del-bg:#5a2222;--del-fg:#ffc9c9;}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1100px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:22px;margin:0 0 20px}
+.sub{color:var(--muted);margin:0 0 20px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:700px){.grid{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px}
+.head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px}
+.head label,.head h2{font-weight:600;font-size:14px;margin:0}
+.count{color:var(--muted);font-size:12.5px}
+textarea,.out{width:100%;font:13.5px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--text);
+  background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;white-space:pre-wrap;word-break:break-word}
+textarea{height:240px;resize:vertical}
+textarea:focus,.out:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:16px 0}
+select,button{font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 12px}
+button{cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button:hover{filter:brightness(1.06)}
+.bar label{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:14px}
+.stats{margin-left:auto;display:flex;gap:10px;font-size:13px;flex-wrap:wrap}
+.pill{padding:2px 9px;border-radius:99px;background:var(--bg);border:1px solid var(--border)}
+.pill.a{background:var(--add-bg);color:var(--add-fg);border-color:transparent}
+.pill.d{background:var(--del-bg);color:var(--del-fg);border-color:transparent}
+.out{min-height:160px;max-height:520px;overflow:auto}
+.ins{background:var(--add-bg);color:var(--add-fg);border-radius:2px}
+.del{background:var(--del-bg);color:var(--del-fg);text-decoration:line-through;border-radius:2px}
+.hide-del .del{display:none}
+.chg{border-radius:3px}
+.chg.active{box-shadow:0 0 0 2px var(--accent)}
+#pop{position:fixed;z-index:50;display:none;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.25);padding:4px}
+#pop.show{display:flex}
+#pop button{display:flex;align-items:center;gap:8px;padding:4px 10px;font-size:13px}
+#pop kbd{font:11px ui-monospace,Menlo,Consolas,monospace;opacity:.7}
+#pop .ap{color:var(--add-fg);background:var(--add-bg);border-color:transparent}
+#pop .dc{color:var(--del-fg);background:var(--del-bg);border-color:transparent}
+.out:empty::before{content:attr(data-placeholder);color:var(--muted);font-style:italic;pointer-events:none;user-select:none}
+</style>
+</head>
+<body>
+<main>
+  <h1>BetterDiff</h1>
+  
+
+  <div class="grid">
+    <div class="card">
+      <div class="head"><label for="a">Original</label><span class="count" id="ca"></span></div>
+      <textarea id="a" placeholder="Paste the original text here…" spellcheck="false"></textarea>
+    </div>
+    <div class="card">
+      <div class="head"><label for="b">Modified</label><span class="count" id="cb"></span></div>
+      <textarea id="b" placeholder="Paste the modified text here…" spellcheck="false"></textarea>
+    </div>
+  </div>
+
+  <div class="bar">
+    <label>Highlight by
+      <select id="mode">
+        <option value="word" selected>Word</option>
+        <option value="char">Character</option>
+        <option value="line">Line</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="showdel" checked> Show removed text</label>
+    <button id="swap" type="button">Swap boxes</button>
+    <button id="applyall" type="button">Apply all</button>
+    <div class="stats">
+      <span class="pill a" id="sa">+0</span>
+      <span class="pill d" id="sd">−0</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="head">
+      <h2>Diff <span class="count">(editable — hover a change to apply or discard it)</span></h2>
+      <span><span class="count" id="cr"></span> <button id="copy" class="primary" type="button">Copy</button></span>
+    </div>
+    <div class="out" id="out" contenteditable="true" spellcheck="false" aria-label="Diff" data-placeholder="Paste text into both boxes to see the differences."></div>
+  </div>
+</main>
+<div id="pop" role="menu"><button type="button" class="ap">Apply <kbd>Ctrl ↵</kbd></button><button type="button" class="dc">Discard <kbd>Ctrl ⌫</kbd></button></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const A = $('a'), B = $('b'), OUT = $('out'), MODE = $('mode');
+
+function words(s){ const t = s.trim(); return t ? t.split(/\s+/).length : 0; }
+function fmt(s){ return words(s).toLocaleString() + ' words · ' + s.length.toLocaleString() + ' chars'; }
+
+function tokenize(s, mode){
+  if (mode === 'char') return Array.from(s);
+  if (mode === 'line') return s.match(/[^\n]*\n|[^\n]+$/g) || [];
+  return s.match(/\s+|[^\s]+/g) || [];
+}
+
+// Returns list of [type, text]; type: 0 same, 1 added, -1 removed
+function diff(a, b){
+  let s = 0;
+  while (s < a.length && s < b.length && a[s] === b[s]) s++;
+  let ea = a.length, eb = b.length;
+  while (ea > s && eb > s && a[ea-1] === b[eb-1]) { ea--; eb--; }
+  const am = a.slice(s, ea), bm = b.slice(s, eb);
+  const ops = [];
+  a.slice(0, s).forEach(t => ops.push([0, t]));
+  const n = am.length, m = bm.length, w = m + 1;
+  if (n === 0) bm.forEach(t => ops.push([1, t]));
+  else if (m === 0) am.forEach(t => ops.push([-1, t]));
+  else if (n * m > 40e6) { am.forEach(t => ops.push([-1, t])); bm.forEach(t => ops.push([1, t])); }
+  else {
+    const L = new Uint16Array((n + 1) * w);
+    for (let i = n - 1; i >= 0; i--)
+      for (let j = m - 1; j >= 0; j--)
+        L[i*w+j] = am[i] === bm[j] ? L[(i+1)*w+j+1] + 1 : Math.max(L[(i+1)*w+j], L[i*w+j+1]);
+    let i = 0, j = 0;
+    while (i < n && j < m) {
+      if (am[i] === bm[j]) { ops.push([0, am[i]]); i++; j++; }
+      else if (L[(i+1)*w+j] >= L[i*w+j+1]) ops.push([-1, am[i++]]);
+      else ops.push([1, bm[j++]]);
+    }
+    while (i < n) ops.push([-1, am[i++]]);
+    while (j < m) ops.push([1, bm[j++]]);
+  }
+  b.slice(eb).forEach(t => ops.push([0, t]));
+  // merge runs
+  const merged = [];
+  for (const [t, x] of ops) {
+    const last = merged[merged.length - 1];
+    if (last && last[0] === t) last[1] += x; else merged.push([t, x]);
+  }
+  return merged;
+}
+
+// Smarter character diff: align whole words first, then only look inside words that were actually
+// swapped for similar ones. Tiny coincidental matches (a stray "e" or "ers") are folded back into the change.
+function refine(da, ib){
+  const ops = diff(Array.from(da), Array.from(ib));
+  const shorter = Math.min(da.length, ib.length);
+  const res = [];
+  ops.forEach(([t, x], k) => {
+    const edge = k === 0 || k === ops.length - 1;
+    const keep = edge ? (x.length >= 3 || (x.length >= 2 && x.length === shorter)) : x.length >= 4;
+    if (t === 0 && !keep) res.push([-1, x], [1, x]); else res.push([t, x]);
+  });
+  const out = []; let d = '', n = '';
+  const flush = () => { if (d) out.push([-1, d]); if (n) out.push([1, n]); d = n = ''; };
+  for (const [t, x] of res) {
+    if (t === 0) { flush(); out.push([0, x]); } else if (t === -1) d += x; else n += x;
+  }
+  flush();
+  return out;
+}
+function smartChar(a, b){
+  const wops = diff(tokenize(a, 'word'), tokenize(b, 'word'));
+  const out = [];
+  let i = 0;
+  while (i < wops.length) {
+    if (wops[i][0] === 0) { out.push(wops[i]); i++; continue; }
+    let da = '', ib = '';
+    while (i < wops.length && wops[i][0] !== 0) { if (wops[i][0] === -1) da += wops[i][1]; else ib += wops[i][1]; i++; }
+    if (da && ib) out.push(...refine(da, ib)); else if (da) out.push([-1, da]); else out.push([1, ib]);
+  }
+  const m = [];
+  for (const [t, x] of out) { const l = m[m.length - 1]; if (l && l[0] === t) l[1] += x; else m.push([t, x]); }
+  return m;
+}
+
+function render(from){
+  const a = from ? from[0] : A.value, b = from ? from[1] : B.value;
+  $('ca').textContent = fmt(A.value);
+  $('cb').textContent = fmt(B.value);
+  OUT.classList.toggle('hide-del', !$('showdel').checked);
+  OUT.textContent = '';
+  OUT.contentEditable = (a || b) ? 'true' : 'false';
+  if (!a && !b) {
+    
+    $('sa').textContent = '+0'; $('sd').textContent = '−0'; $('cr').textContent = '';
+    return;
+  }
+  const mode = MODE.value;
+  const ops = mode === 'char' ? smartChar(a, b) : diff(tokenize(a, mode), tokenize(b, mode));
+  const frag = document.createDocumentFragment();
+  let grp = null;
+  for (const [t, x] of ops) {
+    if (t === 0) { grp = null; frag.appendChild(document.createTextNode(x)); continue; }
+    if (!grp) { grp = document.createElement('span'); grp.className = 'chg'; frag.appendChild(grp); }
+    const sp = document.createElement('span');
+    sp.textContent = x;
+    if (t === 1) sp.className = 'ins';
+    else sp.className = 'del';
+    grp.appendChild(sp);
+  }
+  OUT.appendChild(frag);
+  hidePop();
+  updateStats();
+  updateResultCount();
+}
+
+// Plain text of the result, skipping removed spans and handling browser-inserted line breaks
+function textOf(withDel, withIns){
+  let out = '';
+  (function walk(node){
+    node.childNodes.forEach(n => {
+      if (n.nodeType === 3) out += n.nodeValue;
+      else if (n.nodeType === 1) {
+        if ((n.classList.contains('del') && !withDel) || (n.classList.contains('ins') && !withIns) || n.classList.contains('empty')) return;
+        if (n.tagName === 'BR') { out += '\n'; return; }
+        const block = /^(DIV|P)$/.test(n.tagName);
+        if (block && out && !out.endsWith('\n')) out += '\n';
+        walk(n);
+      }
+    });
+  })(OUT);
+  return out;
+}
+// Result text = removed text dropped, additions kept (what you see in the diff, minus strikethroughs)
+const resultText = () => textOf(false, true);
+function updateResultCount(){ $('cr').textContent = fmt(resultText()); }
+$('applyall').addEventListener('click', () => {
+  hidePop();
+  OUT.querySelectorAll('.chg').forEach(c => {
+    c.replaceWith(document.createTextNode(groupText(c, 'ins')));
+  });
+  updateStats(); updateResultCount();
+});
+
+function cnt(x, mode){
+  return mode === 'char' ? x.length : mode === 'line' ? (x.match(/\n/g)||[]).length + (x.endsWith('\n') || !x ? 0 : 1) : words(x);
+}
+function updateStats(){
+  const mode = MODE.value; let add = 0, del = 0;
+  OUT.querySelectorAll('.ins').forEach(e => add += cnt(e.textContent, mode));
+  OUT.querySelectorAll('.del').forEach(e => del += cnt(e.textContent, mode));
+  const unit = mode === 'char' ? 'chars' : mode === 'line' ? 'lines' : 'words';
+  $('sa').textContent = '+' + add + ' ' + unit;
+  $('sd').textContent = '−' + del + ' ' + unit;
+}
+
+// ---- Apply / discard popup ----
+const POP = $('pop');
+let active = null, hov = null, hideT, popOn = false;
+const isChg = x => x && x.nodeType === 1 && x.classList.contains('chg');
+function caretChg(){
+  const s = getSelection();
+  if (!s.rangeCount || !s.isCollapsed || !OUT.contains(s.anchorNode)) return null;
+  const n = s.anchorNode, o = s.anchorOffset;
+  const el = n.nodeType === 1 ? n : n.parentElement;
+  const c = el && el.closest('.chg');
+  if (c && OUT.contains(c)) return c;
+  let prev, next;
+  if (n.nodeType === 3) { prev = o === 0 ? n.previousSibling : null; next = o === n.length ? n.nextSibling : null; }
+  else { prev = n.childNodes[o - 1]; next = n.childNodes[o]; }
+  return isChg(prev) ? prev : isChg(next) ? next : null;
+}
+function place(){
+  if (!active || !active.isConnected) return hidePop();
+  if (!popOn) { POP.classList.remove('show'); return; }
+  const rs = active.getClientRects(), o = OUT.getBoundingClientRect();
+  if (!rs.length) return hidePop();
+  const r = rs[0];
+  if (r.bottom < o.top || r.top > o.bottom) { POP.classList.remove('show'); return; }
+  POP.classList.add('show');
+  const w = POP.offsetWidth, h = POP.offsetHeight;
+  let top = r.bottom + 4;
+  if (top + h > innerHeight - 4) top = Math.max(4, r.top - h - 4);
+  POP.style.left = Math.max(4, Math.min(r.left, innerWidth - w - 4)) + 'px';
+  POP.style.top = top + 'px';
+}
+function showPop(c, pop){
+  clearTimeout(hideT);
+  if (active && active !== c) active.classList.remove('active');
+  active = c; popOn = !!pop; c.classList.add('active');
+  place();
+}
+function hidePop(){
+  clearTimeout(hideT);
+  if (active) active.classList.remove('active');
+  active = null; popOn = false; POP.classList.remove('show');
+}
+function scheduleHide(){
+  clearTimeout(hideT);
+  hideT = setTimeout(() => { hov = null; const c = caretChg(); c ? showPop(c, false) : hidePop(); }, 250);
+}
+// Text of a change group; text typed directly inside the group always counts
+function groupText(c, keep){
+  let t = '';
+  c.childNodes.forEach(n => {
+    if (n.nodeType === 3) t += n.nodeValue;
+    else if (n.classList && n.classList.contains('ins')) { if (keep === 'ins') t += n.textContent; }
+    else if (n.classList && n.classList.contains('del')) { if (keep === 'del') t += n.textContent; }
+    else t += n.textContent;
+  });
+  return t;
+}
+// keep = 'ins' applies the change (use modified text); 'del' discards it (restore original)
+function resolve(c, keep){
+  if (!c || !c.isConnected) return;
+  const text = groupText(c, keep);
+  const node = document.createTextNode(text);
+  c.replaceWith(node);
+  hov = null; hidePop();
+  OUT.focus();
+  const r = document.createRange(); r.setStart(node, text.length); r.collapse(true);
+  const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+  updateStats(); updateResultCount();
+}
+OUT.addEventListener('mouseover', e => {
+  const c = e.target.closest ? e.target.closest('.chg') : null;
+  hov = c;
+  if (c) showPop(c, true); else scheduleHide();
+});
+OUT.addEventListener('mouseleave', scheduleHide);
+POP.addEventListener('mouseenter', () => { clearTimeout(hideT); hov = active; });
+POP.addEventListener('mouseleave', scheduleHide);
+POP.addEventListener('mousedown', e => e.preventDefault());
+POP.querySelector('.ap').addEventListener('click', () => resolve(active, 'ins'));
+POP.querySelector('.dc').addEventListener('click', () => resolve(active, 'del'));
+document.addEventListener('selectionchange', () => {
+  if (hov) return;
+  const c = caretChg();
+  if (c) showPop(c, false); else hidePop();
+});
+document.addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey) || !active) return;
+  const ae = document.activeElement;
+  if (ae && ae !== OUT && ae !== document.body) return;
+  if (e.key === 'Enter') { e.preventDefault(); resolve(active, 'ins'); }
+  else if (e.key === 'Backspace') { e.preventDefault(); resolve(active, 'del'); }
+});
+OUT.addEventListener('input', place);
+// Keep the Original and Modified boxes the same height when either one is resized
+let syncing = false;
+const ro = new ResizeObserver(entries => {
+  if (syncing) return;
+  const t = entries[0].target, h = t.offsetHeight, other = t === A ? B : A;
+  if (other.offsetHeight !== h) {
+    syncing = true;
+    other.style.height = h + 'px';
+    requestAnimationFrame(() => { syncing = false; });
+  }
+});
+ro.observe(A); ro.observe(B);
+// Removed text is not editable: the caret can move through it, but typing or deleting there is blocked
+OUT.addEventListener('beforeinput', e => {
+  const s = getSelection();
+  if (!s.rangeCount) return;
+  const inDel = n => { const el = n && (n.nodeType === 1 ? n : n.parentElement); return el ? el.closest('.del') : null; };
+  const d = inDel(s.anchorNode), d2 = inDel(s.focusNode);
+  if (!d && !d2) return;
+  e.preventDefault();
+  if (d && s.isCollapsed && e.inputType === 'insertText' && e.data) {
+    const n = s.anchorNode;
+    const before = n.nodeType === 3 ? s.anchorOffset * 2 < n.length : s.anchorOffset === 0;
+    const r = document.createRange();
+    if (before) r.setStartBefore(d); else r.setStartAfter(d);
+    r.collapse(true);
+    s.removeAllRanges(); s.addRange(r);
+    document.execCommand('insertText', false, e.data);
+  }
+});
+OUT.addEventListener('scroll', place);
+addEventListener('scroll', place, { passive: true });
+addEventListener('resize', place);
+
+let timer;
+function schedule(){ clearTimeout(timer); timer = setTimeout(render, 150); }
+A.addEventListener('input', schedule);
+B.addEventListener('input', schedule);
+// Changing granularity re-diffs what is still unresolved; applied/discarded changes are kept
+MODE.addEventListener('change', () => {
+  if (!A.value && !B.value) return render();
+  render([textOf(true, false), textOf(false, true)]);
+});
+$('showdel').addEventListener('change', () => OUT.classList.toggle('hide-del', !$('showdel').checked));
+OUT.addEventListener('input', updateResultCount);
+OUT.addEventListener('paste', e => { e.preventDefault(); document.execCommand('insertText', false, (e.clipboardData||window.clipboardData).getData('text')); });
+$('swap').addEventListener('click', () => { const t = A.value; A.value = B.value; B.value = t; render(); });
+
+$('copy').addEventListener('click', async () => {
+  const btn = $('copy'), text = resultText();
+  try { await navigator.clipboard.writeText(text); }
+  catch (e) {
+    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta);
+    ta.select(); try { document.execCommand('copy'); } catch (_) {} ta.remove();
+  }
+  btn.textContent = 'Copied ✓';
+  setTimeout(() => btn.textContent = 'Copy', 1400);
+});
+
+render();
+</script>
+</body>
+</html>
